@@ -4,7 +4,7 @@ A plugin that refreshes symlinks in an obsidian vault, allowing them to be used.
 
 ## Installation
 
-Clone or copy the contents of this repo to the Obsidian plugins folder, found on the "Community Plugins Page":
+Clone or copy the contents of this repo to the Obsidian plugins folder, found on the "Community Plugins" page:
 
 ![](./README.png)
 

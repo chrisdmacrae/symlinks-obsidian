@@ -1,67 +1,99 @@
 'use strict';
 
-var obsidian = require('obsidian');
-var fs = require('fs');
-var path = require('path');
+const obsidian = require('obsidian');
+const fs = require('fs');
+const path = require('path');
 
 class SymlinkRefresher extends obsidian.Plugin {
-    constructor() {
-        super(...arguments);
-    }
+  constructor() {
+    super(...arguments);
+  }
 
-    refreshed = [];
+  excludedFileNames = [
+    ".git",
+    ".obsidian"
+  ]
 
-    async onload() {
-        console.log("Loading plugin");
-        console.log(this);
+  async onload() {
+    console.log("Loading Obsidian Symlink Refresher Plugin");
 
-        this.vault = this.app.vault;
+    this.registerInterval(setInterval(() => {
+      this.run();
+    }, 30 * 1000));
 
-        this.registerInterval(window.setInterval(() => {
-            this.refreshFiles();
-        }, 30 * 1000));
+    setTimeout(() => {
+      this.run();
+    }, 2.5 * 1000)
+  }
 
-        console.log(this.vault);
-        window.setTimeout(() => this.refreshFiles(), 0);
-    }
+  async run() {
+    const fileNames = this.getFileNames(this.app.vault.adapter.basePath);
 
-    initLeaf() {
-        if (this.app.workspace.getLeavesOfType(VIEW_TYPE_TIMELINE).length > 0) {
-            return;
-        }
+    return this.refreshSymlinks(fileNames, this.app.vault.adapter.basePath);
+  }
+
+  refreshSymlinks(filePaths, basePath) {
+    const directories = [];
+    
+    for (const fileRelPath of filePaths) {
+      const filePath = path.join(basePath, fileRelPath);
+      const tmpPath = filePath.replace(fileRelPath, `~${fileRelPath}`);
+      const stats = fs.lstatSync(filePath);
+
+      if (!stats.isSymbolicLink(filePath) && stats.isDirectory(filePath)) {
+        directories.push(filePath);
+
+        continue;
+      }
+
+      try {
+        fs.accessSync(filePath)
+
+        const isSymlink = stats.isSymbolicLink(filePath);
+        const exists = fs.existsSync(filePath);
+        const hasTemp = fs.existsSync(tmpPath);
         
-        this.app.workspace.getRightLeaf(true).setViewState({
-            type: VIEW_TYPE_TIMELINE,
-        });
+        if (!isSymlink) continue;
+
+        console.log(`Refreshing ${filePath}`);
+
+        if (exists && hasTemp) {
+          fs.unlinkSync(tmpPath);
+        }
+        else if (exists && !hasTemp) {
+          fs.renameSync(filePath, tmpPath);
+          fs.renameSync(tmpPath, filePath);          
+        }
+        else if (!exists && hasTemp) {
+          fs.renameSync(tmpPath, filePath);
+        }
+        else if (!exists && !hasTemp) {
+          throw new Error(`Uh oh! ${filePath} is missing!`);
+        }
+      } catch (error) {
+        console.warn(error.message, { error });
+
+        continue;
+      }
     }
 
-    refreshFiles() {
-        const files = fs.readdirSync(this.vault.adapter.basePath);
+    for (const directory of directories) {
+      try {
+        const directoryPath = path.resolve(basePath, directory);
+        const fileNames = fs.readdirSync(directoryPath);
 
-        files.forEach(file => {
-            const filePath = path.join(this.vault.adapter.basePath, file);
-            const tmpPath = filePath + ".tmp";
-            const stats = fs.lstatSync(filePath)
-            const isRefreshed = this.refreshed.indexOf(filePath) > -1;
+        this.refreshSymlinks(fileNames, directoryPath);
+      } catch (error) {
+        console.warn(error.message, { error });
 
-            if (!isRefreshed && stats.isSymbolicLink() && fs.existsSync(filePath) && !fs.existsSync(tmpPath)) {                
-                fs.renameSync(filePath, tmpPath);
-                this.refreshed.push(filePath);
-            }
-
-            if (fs.existsSync(tmpPath) && !fs.existsSync(filePath)) {
-                fs.renameSync(tmpPath, filePath);
-                this.refreshed.push(filePath);
-            }
-            else if (fs.existsSync(tmpPath)) {
-                fs.unlinkSync(tmpPath);
-            }
-        });
+        continue;
+      }
     }
+  }
 
-    onunload() {
-        console.log("Unloading plugin");
-    }
+  getFileNames(directory) {
+    return fs.readdirSync(directory).filter(fileName => !this.excludedFileNames.includes(fileName));
+  }
 }
 
 module.exports = SymlinkRefresher;

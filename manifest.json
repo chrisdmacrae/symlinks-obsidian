@@ -1,9 +1,9 @@
 {
   "id": "obsidian-symlink-refresher",
   "name": "Symlink Refresher",
-  "version": "0.1.0",
-  "description": "Refreshes symlinks on reboots to support them on Mac OS",
-  "isDesktopOnly": true,
+  "version": "0.2.0",
+  "description": "Refreshes symlinks periodically to ensure obisidan reads their contents",
+  "isDesktopOnly": false,
   "js": "main.js",
   "css": "style.css"
 }
